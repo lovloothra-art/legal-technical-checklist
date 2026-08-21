@@ -533,16 +533,16 @@
 
   function renderChecklistView(docs) {
     let html = `
-      <div style="overflow-x: auto;">
+      <div class="checklist-table-wrapper">
         <table class="checklist-table">
           <thead>
             <tr>
-              <th style="width: 50px; text-align: center;">#</th>
-              <th style="min-width: 280px;">Document Requirement</th>
-              <th style="width: 140px;">Legal Stage</th>
-              <th style="width: 140px;">Technical Stage</th>
-              <th style="width: 260px;">Status Verification</th>
-              <th style="min-width: 200px;">Remarks / Docket Notes</th>
+              <th class="th-num" style="width: 50px; text-align: center;">#</th>
+              <th class="th-doc" style="min-width: 280px;">Document Requirement</th>
+              <th class="th-stage" style="width: 140px;">Legal Stage</th>
+              <th class="th-stage" style="width: 140px;">Technical Stage</th>
+              <th class="th-status" style="width: 260px;">Status Verification</th>
+              <th class="th-remarks" style="min-width: 200px;">Remarks / Docket Notes</th>
             </tr>
           </thead>
           <tbody>
@@ -557,18 +557,23 @@
 
       html += `
         <tr class="${rowClass}" data-doc-id="${doc.id}">
-          <td style="text-align: center; font-weight: 600; color: var(--text-muted);">${index + 1}</td>
-          <td>
-            <div class="doc-name">${escapeHtml(doc.name)}</div>
-            ${state.selectedPropertyType !== 'ALL' ? `<div style="font-size: 0.72rem; color: var(--primary); margin-top: 2px;">• Applicable for: ${escapeHtml(state.selectedPropertyType)}</div>` : ''}
+          <td class="td-num" style="text-align: center; font-weight: 700; color: var(--text-muted);">${index + 1}</td>
+          <td class="td-doc">
+            <div class="doc-header-mobile">
+              <span class="mobile-badge-index">#${index + 1}</span>
+              <div class="doc-name">${escapeHtml(doc.name)}</div>
+            </div>
+            ${state.selectedPropertyType !== 'ALL' ? `<div class="doc-prop-tag">📌 Applicable for: <strong>${escapeHtml(state.selectedPropertyType)}</strong></div>` : ''}
           </td>
-          <td>
+          <td class="td-stage td-legal">
+            <span class="stage-label-mobile">Legal:</span>
             <span class="badge-stage ${getStageBadgeClass(doc.legalStage)}">${escapeHtml(doc.legalStage)}</span>
           </td>
-          <td>
+          <td class="td-stage td-tech">
+            <span class="stage-label-mobile">Tech:</span>
             <span class="badge-stage ${getStageBadgeClass(doc.technicalStage)}">${escapeHtml(doc.technicalStage)}</span>
           </td>
-          <td>
+          <td class="td-status">
             <div class="status-pill-group">
               <button type="button" class="status-pill ${currentStatus === 'pending' ? 'active-pending' : ''}" data-action="set-status" data-status="pending" data-doc="${doc.id}">Pending</button>
               <button type="button" class="status-pill ${currentStatus === 'collected' ? 'active-collected' : ''}" data-action="set-status" data-status="collected" data-doc="${doc.id}">✓ Collected</button>
@@ -577,7 +582,7 @@
             </div>
             <div class="print-status-display">${currentStatus.toUpperCase()}</div>
           </td>
-          <td>
+          <td class="td-remarks">
             <input type="text" class="doc-notes-input" placeholder="Add note or dispatch tracking..." value="${escapeHtml(currentNotes)}" data-action="update-notes" data-doc="${doc.id}">
           </td>
         </tr>
@@ -603,11 +608,12 @@
     const propTypes = currentTable.propertyTypes || [];
 
     let html = `
+      <div class="matrix-hint-mobile">👉 Swipe horizontally to view all property columns</div>
       <div class="matrix-container">
         <table class="matrix-table">
           <thead>
             <tr>
-              <th class="sticky-col" style="min-width: 320px;">Document Requirement</th>
+              <th class="sticky-col">Document Requirement</th>
     `;
 
     propTypes.forEach(pt => {
