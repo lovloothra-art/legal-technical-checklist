@@ -119,18 +119,25 @@ body {
   gap: 0.85rem;
 }
 
-.brand-icon {
-  width: 44px;
-  height: 44px;
+.brand-icon-wrapper {
+  width: 46px;
+  height: 46px;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #2563eb, #4f46e5);
-  color: white;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.35rem;
-  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
+  padding: 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.brand-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
 }
 
 .brand-title {
@@ -943,10 +950,10 @@ body {
     gap: 0.75rem;
   }
 
-  .brand-icon {
+  .brand-icon-wrapper {
     width: 38px;
     height: 38px;
-    font-size: 1.2rem;
+    padding: 3px;
   }
 
   .brand-title {
@@ -1291,8 +1298,12 @@ body {
     border-bottom: 2px solid #000;
   }
 
-  .brand-icon {
-    display: none;
+  .brand-icon-wrapper {
+    width: 32px;
+    height: 32px;
+    border: none;
+    box-shadow: none;
+    padding: 0;
   }
 
   .case-details-card {
