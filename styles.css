@@ -1307,6 +1307,7 @@ body {
   }
 
   .case-fields {
+    display: grid !important;
     padding: 0.6rem 0.8rem;
     grid-template-columns: repeat(3, 1fr) !important;
   }

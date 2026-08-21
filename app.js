@@ -191,11 +191,13 @@
 
     if (el.caseToggle) {
       el.caseToggle.addEventListener('click', () => {
-        const isOpen = el.caseFields.style.display !== 'none';
-        el.caseFields.style.display = isOpen ? 'none' : 'grid';
-        el.caseToggle.classList.toggle('open', !isOpen);
+        const isCurrentlyOpen = el.caseFields.style.display !== 'none';
+        el.caseFields.style.display = isCurrentlyOpen ? 'none' : 'grid';
+        el.caseToggle.classList.toggle('open', !isCurrentlyOpen);
         const icon = el.caseToggle.querySelector('.toggle-icon');
-        if (icon) icon.textContent = isOpen ? '▼' : '▲';
+        if (icon) icon.textContent = isCurrentlyOpen ? '▼' : '▲';
+        const hint = document.getElementById('caseToggleHint');
+        if (hint) hint.textContent = isCurrentlyOpen ? '(Click to expand)' : '(Click to collapse)';
       });
     }
   }
