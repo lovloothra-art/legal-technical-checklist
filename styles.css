@@ -91,7 +91,7 @@ body {
 .app-container {
   max-width: 1440px;
   margin: 0 auto;
-  padding: 1.5rem 2rem 4rem;
+  padding: 1.5rem 2rem 6rem;
 }
 
 /* Header */
@@ -160,6 +160,33 @@ body {
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+/* Hidden per request: Print/PDF, Export CSV, Save Progress */
+#btnPrint,
+#btnExportCSV,
+#btnSaveLocal {
+  display: none;
+}
+
+/* Sticky Submit CTA bar, docked to the bottom of the viewport */
+.submit-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 900;
+  display: flex;
+  justify-content: center;
+  padding: 0.85rem 1.5rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+}
+
+#btnSubmitInitiation {
+  width: 100%;
+  max-width: 480px;
 }
 
 /* Buttons */
@@ -1121,7 +1148,7 @@ body {
 /* Toast Notifications */
 .toast-container {
   position: fixed;
-  bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
   right: 1.5rem;
   z-index: 1200;
   display: flex;
@@ -1161,7 +1188,7 @@ body {
 /* Tablet (max-width: 900px) */
 @media (max-width: 900px) {
   .app-container {
-    padding: 1rem 1.25rem 3.5rem;
+    padding: 1rem 1.25rem 5.5rem;
   }
 
   .filter-grid {
@@ -1176,7 +1203,7 @@ body {
 /* Mobile Devices (max-width: 768px) */
 @media (max-width: 768px) {
   .app-container {
-    padding: 0.75rem 0.75rem 4rem;
+    padding: 0.75rem 0.75rem 6rem;
   }
 
   /* Header adjustments */
@@ -1492,7 +1519,7 @@ body {
   .toast-container {
     left: 1rem;
     right: 1rem;
-    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
   }
 
   .toast {
@@ -1540,6 +1567,7 @@ body {
   }
 
   .header-actions,
+  .submit-bar,
   .entry-gate,
   .toolbar-card,
   .sub-tabs-container,

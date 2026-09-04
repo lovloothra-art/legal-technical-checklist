@@ -33,9 +33,6 @@
         </div>
         
         <div class="header-actions">
-          <button type="button" class="btn btn-success" id="btnSubmitInitiation" title="Submit Initiation Status to Google Sheet">
-            📤 Submit Initiation Status
-          </button>
           <button type="button" class="btn btn-outline" id="btnPrint" title="Print Checklist or Save as PDF">
             🖨️ Print / PDF
           </button>
@@ -57,6 +54,13 @@
         <button type="button" class="btn btn-outline" id="btnChangeContext">Change</button>
       </div>
     </header>
+
+    <!-- Sticky Submit CTA -->
+    <div class="submit-bar" id="submitBar">
+      <button type="button" class="btn btn-success" id="btnSubmitInitiation" title="Submit Initiation Status to Google Sheet">
+        📤 Submit Initiation Status
+      </button>
+    </div>
 
     <!-- Entry Gate: choose vertical, then checklist discipline -->
     <section class="entry-gate" id="entryGate">

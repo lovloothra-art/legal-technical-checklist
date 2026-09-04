@@ -53,6 +53,7 @@
     workspace: document.getElementById('workspace'),
     contextBar: document.getElementById('contextBar'),
     headerActions: document.querySelector('.header-actions'),
+    submitBar: document.getElementById('submitBar'),
     contextLabel: document.getElementById('contextLabel'),
     btnChangeContext: document.getElementById('btnChangeContext'),
     countDSA: document.getElementById('countDSA'),
@@ -370,6 +371,7 @@
     // no checklist at all.
     el.contextBar.style.display = 'none';
     el.headerActions.style.display = 'none';
+    el.submitBar.style.display = 'none';
 
     el.gateChannelDSA.classList.toggle('active', state.channel === 'Secured DSA');
     el.gateChannelDirect.classList.toggle('active', state.channel === 'Secured Direct');
@@ -387,6 +389,7 @@
     el.workspace.style.display = 'block';
     el.contextBar.style.display = '';
     el.headerActions.style.display = '';
+    el.submitBar.style.display = '';
 
     const channelIcon = state.channel === 'Secured Direct' ? '🎯' : '🏢';
     const discIcon = state.discipline === 'technical' ? '📐' : '⚖️';
