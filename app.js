@@ -5,12 +5,12 @@
 
   // Application State
   const state = {
-    channel: 'Secured DSA', // 'Secured DSA' | 'Secured Direct'
+    channel: '', // '' | 'Secured DSA' | 'Secured Direct' (empty = not yet chosen on the entry gate)
     selectedState: '',
     selectedTableIndex: 0,
     selectedPropertyType: 'ALL',
-    selectedLegalStage: 'Initiation', // Default to 'Initiation'
-    selectedTechStage: 'Initiation',  // Default to 'Initiation'
+    selectedStage: 'Initiation', // Default to 'Initiation'
+    discipline: null, // 'legal' | 'technical' | null (null = entry gate is showing)
     searchQuery: '',
     viewMode: 'checklist', // 'checklist' | 'matrix'
     caseDetails: {
@@ -37,18 +37,30 @@
 
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const STATUS_LABEL = { pending: 'Pending', collected: 'Collected', waived: 'Waived', na: 'N/A' };
+  const STAGE_OPTIONS = {
+    legal:     ['Login','Initiation','Legal Vetting','Cheque Handover','Post Disbursement','Not Applicable'],
+    technical: ['Login','Initiation','Legal Vetting','Cheque Handover','If Applicable','Not Applicable']
+  };
+  const DISCIPLINE_LABEL = { legal: 'Legal', technical: 'Technical' };
 
   // DOM Elements
   const el = {
-    channelDSA: document.getElementById('channelDSA'),
-    channelDirect: document.getElementById('channelDirect'),
+    entryGate: document.getElementById('entryGate'),
+    gateChannelDSA: document.getElementById('gateChannelDSA'),
+    gateChannelDirect: document.getElementById('gateChannelDirect'),
+    gateDiscLegal: document.getElementById('gateDiscLegal'),
+    gateDiscTechnical: document.getElementById('gateDiscTechnical'),
+    workspace: document.getElementById('workspace'),
+    contextBar: document.getElementById('contextBar'),
+    headerActions: document.querySelector('.header-actions'),
+    contextLabel: document.getElementById('contextLabel'),
+    btnChangeContext: document.getElementById('btnChangeContext'),
     countDSA: document.getElementById('countDSA'),
     countDirect: document.getElementById('countDirect'),
     stateSelect: document.getElementById('stateSelect'),
     subTabsContainer: document.getElementById('subTabsContainer'),
     propertyTypeSelect: document.getElementById('propertyTypeSelect'),
-    legalStageSelect: document.getElementById('legalStageSelect'),
-    techStageSelect: document.getElementById('techStageSelect'),
+    stageSelect: document.getElementById('stageSelect'),
     searchInput: document.getElementById('searchInput'),
     clearSearchBtn: document.getElementById('clearSearchBtn'),
     viewChecklistBtn: document.getElementById('viewChecklistBtn'),
@@ -97,15 +109,20 @@
     return currentStage.toLowerCase() === filterStage.toLowerCase();
   }
 
+  // Single read point for a document's stage — keys off the active discipline
+  function getDocStage(doc) {
+    return state.discipline === 'technical' ? doc.technicalStage : doc.legalStage;
+  }
+
   // Parse query parameters from URL
   function readQueryParams() {
     try {
       const params = new URLSearchParams(window.location.search);
       const chParam = (params.get('channel') || params.get('type') || '').toLowerCase().trim();
-      
+
       if (chParam === 'direct' || chParam === 'secured-direct' || chParam === 'secured_direct' || chParam === 'secured direct') {
         state.channel = 'Secured Direct';
-      } else {
+      } else if (chParam === 'dsa' || chParam === 'secured-dsa' || chParam === 'secured_dsa' || chParam === 'secured dsa') {
         state.channel = 'Secured DSA';
       }
 
@@ -114,16 +131,14 @@
         state.selectedState = stateParam;
       }
 
-      const legalParam = params.get('legal') || params.get('legalStage');
-      if (legalParam) {
-        state.selectedLegalStage = legalParam.toLowerCase() === 'all' ? 'ALL' : legalParam;
-        if (el.legalStageSelect) el.legalStageSelect.value = state.selectedLegalStage;
+      const discParam = (params.get('disc') || '').toLowerCase().trim();
+      if (discParam === 'legal' || discParam === 'technical') {
+        state.discipline = discParam;
       }
 
-      const techParam = params.get('tech') || params.get('techStage');
-      if (techParam) {
-        state.selectedTechStage = techParam.toLowerCase() === 'all' ? 'ALL' : techParam;
-        if (el.techStageSelect) el.techStageSelect.value = state.selectedTechStage;
+      const stageParam = params.get('stage');
+      if (stageParam) {
+        state.selectedStage = stageParam.toLowerCase() === 'all' ? 'ALL' : stageParam;
       }
 
       const viewParam = (params.get('view') || '').toLowerCase();
@@ -141,18 +156,16 @@
       const url = new URL(window.location.href);
       const chCode = state.channel === 'Secured Direct' ? 'direct' : 'dsa';
       url.searchParams.set('channel', chCode);
+      if (state.discipline) {
+        url.searchParams.set('disc', state.discipline);
+      }
       if (state.selectedState) {
         url.searchParams.set('state', state.selectedState);
       }
-      if (state.selectedLegalStage !== 'Initiation') {
-        url.searchParams.set('legal', state.selectedLegalStage);
+      if (state.selectedStage !== 'Initiation') {
+        url.searchParams.set('stage', state.selectedStage);
       } else {
-        url.searchParams.delete('legal');
-      }
-      if (state.selectedTechStage !== 'Initiation') {
-        url.searchParams.set('tech', state.selectedTechStage);
-      } else {
-        url.searchParams.delete('tech');
+        url.searchParams.delete('stage');
       }
       if (state.viewMode === 'matrix') {
         url.searchParams.set('view', 'matrix');
@@ -173,12 +186,13 @@
     setupEventListeners();
     loadCaseDetails();
 
-    // Set initial dropdown values
-    if (el.legalStageSelect) el.legalStageSelect.value = state.selectedLegalStage;
-    if (el.techStageSelect) el.techStageSelect.value = state.selectedTechStage;
-
-    // Initial Load with resolved channel from URL params
-    setChannel(state.channel, state.selectedState);
+    // Only skip the entry gate when both a channel and a discipline were resolved (e.g. from URL params)
+    if (state.channel && state.discipline) {
+      setDiscipline(state.discipline);
+      enterWorkspace();
+    } else {
+      showGate();
+    }
   }
 
   function setupChannelCounts() {
@@ -227,9 +241,35 @@
   }
 
   function setupEventListeners() {
-    // Channel Switchers
-    el.channelDSA.addEventListener('click', () => setChannel('Secured DSA'));
-    el.channelDirect.addEventListener('click', () => setChannel('Secured Direct'));
+    // Entry Gate — Step 1: choose vertical (does not load data yet)
+    el.gateChannelDSA.addEventListener('click', () => {
+      state.channel = 'Secured DSA';
+      el.gateChannelDSA.classList.add('active');
+      el.gateChannelDirect.classList.remove('active');
+      enableGateStep2();
+    });
+    el.gateChannelDirect.addEventListener('click', () => {
+      state.channel = 'Secured Direct';
+      el.gateChannelDirect.classList.add('active');
+      el.gateChannelDSA.classList.remove('active');
+      enableGateStep2();
+    });
+
+    // Entry Gate — Step 2: choose discipline, then enter the workspace
+    el.gateDiscLegal.addEventListener('click', () => {
+      if (!state.channel) return;
+      setDiscipline('legal');
+      updateQueryParams();
+      enterWorkspace();
+    });
+    el.gateDiscTechnical.addEventListener('click', () => {
+      if (!state.channel) return;
+      setDiscipline('technical');
+      updateQueryParams();
+      enterWorkspace();
+    });
+
+    el.btnChangeContext.addEventListener('click', showGate);
 
     // State Selector
     el.stateSelect.addEventListener('change', (e) => {
@@ -258,15 +298,9 @@
       render();
     });
 
-    // Stage Selectors
-    el.legalStageSelect.addEventListener('change', (e) => {
-      state.selectedLegalStage = e.target.value;
-      updateQueryParams();
-      render();
-    });
-
-    el.techStageSelect.addEventListener('change', (e) => {
-      state.selectedTechStage = e.target.value;
+    // Stage Selector
+    el.stageSelect.addEventListener('change', (e) => {
+      state.selectedStage = e.target.value;
       updateQueryParams();
       render();
     });
@@ -319,11 +353,76 @@
     });
   }
 
+  function enableGateStep2() {
+    [el.gateDiscLegal, el.gateDiscTechnical].forEach(btn => {
+      btn.classList.remove('is-disabled');
+      btn.disabled = false;
+    });
+  }
+
+  // Show the entry gate (Step 1 / Step 2 vertical + discipline picker), hide the workspace
+  function showGate() {
+    el.entryGate.style.display = '';
+    el.workspace.style.display = 'none';
+
+    // Neither the breadcrumb nor the docket actions mean anything until a
+    // channel and discipline are chosen — Submit in particular would target
+    // no checklist at all.
+    el.contextBar.style.display = 'none';
+    el.headerActions.style.display = 'none';
+
+    el.gateChannelDSA.classList.toggle('active', state.channel === 'Secured DSA');
+    el.gateChannelDirect.classList.toggle('active', state.channel === 'Secured Direct');
+    el.gateDiscLegal.classList.toggle('active', state.discipline === 'legal');
+    el.gateDiscTechnical.classList.toggle('active', state.discipline === 'technical');
+
+    if (state.channel) {
+      enableGateStep2();
+    }
+  }
+
+  // Hide the gate, show the workspace, and load the data for the chosen channel/discipline
+  function enterWorkspace() {
+    el.entryGate.style.display = 'none';
+    el.workspace.style.display = 'block';
+    el.contextBar.style.display = '';
+    el.headerActions.style.display = '';
+
+    const channelIcon = state.channel === 'Secured Direct' ? '🎯' : '🏢';
+    const discIcon = state.discipline === 'technical' ? '📐' : '⚖️';
+    el.contextLabel.textContent = `${channelIcon} ${state.channel} › ${discIcon} ${DISCIPLINE_LABEL[state.discipline]} Checklist`;
+    el.contextBar.classList.toggle('channel-dsa', state.channel === 'Secured DSA');
+    el.contextBar.classList.toggle('channel-direct', state.channel === 'Secured Direct');
+
+    el.viewChecklistBtn.classList.toggle('active', state.viewMode === 'checklist');
+    el.viewMatrixBtn.classList.toggle('active', state.viewMode === 'matrix');
+
+    setChannel(state.channel, state.selectedState);
+  }
+
+  // Set the active discipline (legal/technical), rebuilding the stage dropdown for its vocabulary
+  function setDiscipline(d) {
+    state.discipline = d;
+
+    el.stageSelect.innerHTML = '';
+    STAGE_OPTIONS[d].forEach(stage => {
+      const opt = document.createElement('option');
+      opt.value = stage;
+      opt.textContent = stage;
+      el.stageSelect.appendChild(opt);
+    });
+
+    if (STAGE_OPTIONS[d].indexOf(state.selectedStage) === -1) {
+      state.selectedStage = 'Initiation';
+    }
+    el.stageSelect.value = state.selectedStage;
+
+    el.btnSubmitInitiation.textContent = `📤 Submit ${DISCIPLINE_LABEL[d]} Initiation`;
+  }
+
   function setChannel(channelName, preferredState = null) {
     state.channel = channelName;
-    el.channelDSA.classList.toggle('active', channelName === 'Secured DSA');
-    el.channelDirect.classList.toggle('active', channelName === 'Secured Direct');
-    
+
     const states = Object.keys(CHECKLIST_DATA[channelName] || {});
     el.stateSelect.innerHTML = '';
     
@@ -394,7 +493,7 @@
   function getStorageKey() {
     const currentTable = getCurrentTable();
     const tableTitle = currentTable ? currentTable.title : 'default';
-    return `checklist_${state.channel}_${state.selectedState}_${tableTitle}`;
+    return `checklist_${state.channel}_${state.discipline}_${state.selectedState}_${tableTitle}`;
   }
 
   function getCaseStorageKey() {
@@ -449,7 +548,7 @@
   function performReset() {
     localStorage.removeItem(getCaseStorageKey());
     Object.keys(localStorage).forEach(k => {
-      if (k.indexOf('checklist_' + state.channel + '_') === 0) {
+      if (k.indexOf('checklist_' + state.channel + '_' + state.discipline + '_') === 0) {
         localStorage.removeItem(k);
       }
     });
@@ -466,18 +565,17 @@
     if (el.searchInput) el.searchInput.value = '';
 
     state.selectedPropertyType = 'ALL';
-    state.selectedLegalStage = 'Initiation';
-    state.selectedTechStage = 'Initiation';
+    state.selectedStage = 'Initiation';
     if (el.propertyTypeSelect) el.propertyTypeSelect.value = 'ALL';
-    if (el.legalStageSelect) el.legalStageSelect.value = 'Initiation';
-    if (el.techStageSelect) el.techStageSelect.value = 'Initiation';
+    if (el.stageSelect) el.stageSelect.value = 'Initiation';
 
     updateQueryParams();
     render();
   }
 
   function resetChecklist() {
-    if (confirm('This will clear document statuses, notes and docket details for every state in this channel. Search will be cleared, Property Type reset to All, and both stages reset to Initiation. The selected state is kept. Continue?')) {
+    const disciplineLabel = DISCIPLINE_LABEL[state.discipline] || '';
+    if (confirm(`This will clear document statuses, notes and docket details for every state in the ${state.channel} ${disciplineLabel} checklist. Search will be cleared, Property Type reset to All, and Process Stage reset to Initiation. The selected state is kept. Continue?`)) {
       performReset();
       showToast('Checklist has been reset');
     }
@@ -516,18 +614,14 @@
         const checkVal = doc.checks[state.selectedPropertyType];
         if (!checkVal) return false;
       }
-      if (!matchStage(doc.legalStage, state.selectedLegalStage)) {
-        return false;
-      }
-      if (!matchStage(doc.technicalStage, state.selectedTechStage)) {
+      if (!matchStage(getDocStage(doc), state.selectedStage)) {
         return false;
       }
       if (state.searchQuery) {
         const q = state.searchQuery;
         const nameMatch = doc.name.toLowerCase().includes(q);
-        const legalMatch = (doc.legalStage || '').toLowerCase().includes(q);
-        const techMatch = (doc.technicalStage || '').toLowerCase().includes(q);
-        if (!nameMatch && !legalMatch && !techMatch) return false;
+        const stageMatch = (getDocStage(doc) || '').toLowerCase().includes(q);
+        if (!nameMatch && !stageMatch) return false;
       }
       return true;
     });
@@ -535,36 +629,16 @@
 
   // Filter Documents based on current filters
   function getFilteredDocuments() {
-    const currentTable = getCurrentTable();
-    if (!currentTable) return [];
+    return getMatchingDocsForTable(getCurrentTable());
+  }
 
-    return currentTable.documents.filter(doc => {
-      // Property type filter
-      if (state.selectedPropertyType !== 'ALL') {
-        const checkVal = doc.checks[state.selectedPropertyType];
-        if (!checkVal) return false;
-      }
-
-      // Legal Stage filter (using normalized matcher)
-      if (!matchStage(doc.legalStage, state.selectedLegalStage)) {
-        return false;
-      }
-
-      // Technical Stage filter (using normalized matcher)
-      if (!matchStage(doc.technicalStage, state.selectedTechStage)) {
-        return false;
-      }
-
-      // Search query
-      if (state.searchQuery) {
-        const q = state.searchQuery;
-        const nameMatch = doc.name.toLowerCase().includes(q);
-        const legalMatch = (doc.legalStage || '').toLowerCase().includes(q);
-        const techMatch = (doc.technicalStage || '').toLowerCase().includes(q);
-        if (!nameMatch && !legalMatch && !techMatch) return false;
-      }
-
-      return true;
+  // Whether the given table has any document whose stage (for the active discipline)
+  // is something other than 'Not Applicable' — i.e. this discipline is relevant here at all.
+  function tableHasDisciplineDocs(table) {
+    if (!table) return false;
+    return table.documents.some(doc => {
+      const stage = (getDocStage(doc) || 'Not Applicable').trim().toLowerCase();
+      return stage !== 'not applicable';
     });
   }
 
@@ -582,21 +656,36 @@
 
     // Update Section Title & Subtitle
     el.sectionTitle.textContent = `${state.channel} › ${state.selectedState} - ${currentTable.title}`;
-    const propSubtitle = state.selectedPropertyType === 'ALL' 
-      ? 'All Property Categories' 
+    const propSubtitle = state.selectedPropertyType === 'ALL'
+      ? 'All Property Categories'
       : `Filtered for: ${state.selectedPropertyType}`;
     el.sectionSubtitle.textContent = `Showing ${filteredDocs.length} of ${currentTable.documents.length} documents • ${propSubtitle}`;
 
     if (filteredDocs.length === 0) {
+      if (!tableHasDisciplineDocs(currentTable)) {
+        const disciplineLabel = DISCIPLINE_LABEL[state.discipline] || '';
+        el.contentArea.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">🚫</div>
+            <h3>No ${escapeHtml(disciplineLabel)} documents are defined for ${escapeHtml(state.channel)} / ${escapeHtml(state.selectedState)}</h3>
+            <p>${escapeHtml(disciplineLabel)} initiation is not applicable for this geography.</p>
+          </div>
+        `;
+        if (el.btnSubmitInitiation) el.btnSubmitInitiation.disabled = true;
+        return;
+      }
       el.contentArea.innerHTML = `
         <div class="empty-state">
           <div class="empty-icon">🔍</div>
           <h3>No documents match your active filters</h3>
-          <p>Try adjusting your search keywords, Property Type, or Legal/Technical Stage filters.</p>
+          <p>Try adjusting your search keywords, Property Type, or Process Stage filter.</p>
         </div>
       `;
+      if (el.btnSubmitInitiation) el.btnSubmitInitiation.disabled = false;
       return;
     }
+
+    if (el.btnSubmitInitiation) el.btnSubmitInitiation.disabled = false;
 
     if (state.viewMode === 'checklist') {
       renderChecklistView(filteredDocs);
@@ -624,8 +713,7 @@
             <tr>
               <th class="th-num" style="width: 50px; text-align: center;">#</th>
               <th class="th-doc" style="min-width: 280px;">Document Requirement</th>
-              <th class="th-stage" style="width: 140px;">Legal Stage</th>
-              <th class="th-stage" style="width: 140px;">Technical Stage</th>
+              <th class="th-stage" style="width: 140px;">${escapeHtml(DISCIPLINE_LABEL[state.discipline])} Stage</th>
               <th class="th-status" style="width: 260px;">Status Verification</th>
               <th class="th-remarks" style="min-width: 200px;">Remarks / Docket Notes</th>
             </tr>
@@ -650,13 +738,9 @@
             </div>
             ${state.selectedPropertyType !== 'ALL' ? `<div class="doc-prop-tag">📌 Applicable for: <strong>${escapeHtml(state.selectedPropertyType)}</strong></div>` : ''}
           </td>
-          <td class="td-stage td-legal">
-            <span class="stage-label-mobile">Legal:</span>
-            <span class="badge-stage ${getStageBadgeClass(doc.legalStage)}">${escapeHtml(doc.legalStage)}</span>
-          </td>
-          <td class="td-stage td-tech">
-            <span class="stage-label-mobile">Tech:</span>
-            <span class="badge-stage ${getStageBadgeClass(doc.technicalStage)}">${escapeHtml(doc.technicalStage)}</span>
+          <td class="td-stage">
+            <span class="stage-label-mobile">${state.discipline === 'technical' ? 'Technical:' : 'Legal:'}</span>
+            <span class="badge-stage ${getStageBadgeClass(getDocStage(doc))}">${escapeHtml(getDocStage(doc))}</span>
           </td>
           <td class="td-status">
             <div class="status-pill-group">
@@ -708,8 +792,7 @@
     });
 
     html += `
-              <th style="min-width: 120px;">Legal Stage</th>
-              <th style="min-width: 120px;">Technical Stage</th>
+              <th style="min-width: 120px;">${escapeHtml(DISCIPLINE_LABEL[state.discipline])} Stage</th>
             </tr>
           </thead>
           <tbody>
@@ -735,8 +818,7 @@
       });
 
       html += `
-          <td><span class="badge-stage ${getStageBadgeClass(doc.legalStage)}">${escapeHtml(doc.legalStage)}</span></td>
-          <td><span class="badge-stage ${getStageBadgeClass(doc.technicalStage)}">${escapeHtml(doc.technicalStage)}</span></td>
+          <td><span class="badge-stage ${getStageBadgeClass(getDocStage(doc))}">${escapeHtml(getDocStage(doc))}</span></td>
         </tr>
       `;
     });
@@ -809,7 +891,8 @@
     if (!currentTable) return;
 
     const docs = getFilteredDocuments();
-    let csv = `Legal & Technical Checklist - ${state.channel} - ${state.selectedState} - ${currentTable.title}
+    const disciplineLabel = DISCIPLINE_LABEL[state.discipline] || '';
+    let csv = `${disciplineLabel} Checklist - ${state.channel} - ${state.selectedState} - ${currentTable.title}
 `;
     csv += `Jarvis Application ID:,"${state.caseDetails.appNo}"
 `;
@@ -821,12 +904,12 @@
 
 `;
 
-    csv += `Sr No,Document Name,Legal Stage,Technical Stage,Status,Remarks
+    csv += `Sr No,Document Name,${disciplineLabel} Stage,Status,Remarks
 `;
 
     docs.forEach((doc, idx) => {
       const statusData = state.checklistStatus[doc.id] || { status: 'pending', notes: '' };
-      csv += `${idx + 1},"${doc.name.replace(/"/g, '""')}","${doc.legalStage}","${doc.technicalStage}","${statusData.status}","${(statusData.notes || '').replace(/"/g, '""')}"
+      csv += `${idx + 1},"${doc.name.replace(/"/g, '""')}","${getDocStage(doc)}","${statusData.status}","${(statusData.notes || '').replace(/"/g, '""')}"
 `;
     });
 
@@ -834,7 +917,7 @@
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `Checklist_${state.selectedState}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `Checklist_${state.selectedState}_${disciplineLabel}_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -876,12 +959,8 @@
       showToast('Submission endpoint is not configured. Set SHEETS_ENDPOINT in app.js.', 'error');
       return;
     }
-    if (state.selectedLegalStage !== 'Initiation') {
-      showToast('This submission needs to be recorded only for Initiation. Set Legal Stage Requirement to "Initiation".', 'error');
-      return;
-    }
-    if (state.selectedTechStage !== 'Initiation') {
-      showToast('This submission needs to be recorded only for Initiation. Set Technical Stage Requirement to "Initiation".', 'error');
+    if (state.selectedStage !== 'Initiation') {
+      showToast(`This submission needs to be recorded only for Initiation. Set ${DISCIPLINE_LABEL[state.discipline]} Stage Requirement to "Initiation".`, 'error');
       return;
     }
     const appId = (state.caseDetails.appNo || '').trim();
@@ -942,6 +1021,7 @@
     const payload = {
       token: SHEETS_TOKEN,
       channel: state.channel,
+      discipline: DISCIPLINE_LABEL[state.discipline],
       jarvisAppId: appId,
       borrowerName: (state.caseDetails.customerName || '').trim(),
       propertyAddress: (state.caseDetails.propertyAddress || '').trim(),

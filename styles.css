@@ -226,47 +226,138 @@ body {
   background-color: var(--danger-light);
 }
 
-/* Channel Tabs (DSA vs Direct) */
-.channel-tabs {
+/* Entry Gate (Step 1: vertical, Step 2: checklist) */
+.entry-gate {
+  max-width: 900px;
+  margin: 3rem auto;
+  padding: 0 1.5rem;
   display: flex;
-  background-color: var(--bg-subtle);
-  padding: 0.3rem;
-  border-radius: var(--radius-md);
-  gap: 0.3rem;
+  flex-direction: column;
+  gap: 2rem;
 }
 
-.channel-tab {
-  flex: 1;
-  text-align: center;
-  padding: 0.65rem 1rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: var(--transition);
-  border: none;
-  background: transparent;
+.gate-step {
   display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.gate-step-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.gate-cards {
+  display: flex;
+  gap: 1rem;
+}
+
+.gate-card {
+  flex: 1;
+  min-height: 170px;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  min-height: 42px;
-}
-
-.channel-tab.active {
+  gap: 0.6rem;
+  padding: 1.5rem 1rem;
   background-color: var(--bg-card);
-  color: var(--primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: var(--transition);
+  font-family: inherit;
+  color: inherit;
+  text-align: center;
 }
 
-.channel-tab .badge-count {
+.gate-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--text-light);
+}
+
+.gate-card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.gate-card.active {
+  border-color: var(--primary);
+  background-color: var(--primary-light);
+  box-shadow: var(--shadow-md);
+}
+
+.gate-card.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--bg-subtle);
+}
+
+.gate-card.is-disabled:hover {
+  transform: none;
+  box-shadow: var(--shadow-sm);
+  border-color: var(--border-color);
+}
+
+.gate-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.gate-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--dark);
+}
+
+.gate-count {
   background-color: var(--primary-light);
   color: var(--primary);
   font-size: 0.72rem;
   padding: 0.15rem 0.5rem;
   border-radius: var(--radius-full);
   font-weight: 700;
+  border: 1px solid var(--primary-border);
+}
+
+.gate-desc {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+  max-width: 22ch;
+}
+
+/* Context Bar (replaces Channel Tabs — states active vertical + checklist) */
+.context-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-md);
+  background-color: var(--bg-subtle);
+  border-left: 4px solid var(--border-color);
+}
+
+.context-bar.channel-dsa {
+  border-left-color: var(--primary);
+  background-color: var(--primary-light);
+}
+
+.context-bar.channel-direct {
+  border-left-color: var(--secondary);
+  background-color: var(--secondary-light);
+}
+
+.context-label {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--dark);
 }
 
 /* Case Details Collapsible Card */
@@ -1133,17 +1224,17 @@ body {
     min-height: 38px;
   }
 
-  .channel-tabs {
-    flex-direction: row;
-    padding: 0.25rem;
+  .gate-cards {
+    flex-direction: column;
   }
 
-  .channel-tab {
-    font-size: 0.78rem;
-    padding: 0.55rem 0.4rem;
-    flex-direction: column;
-    gap: 0.2rem;
-    min-height: 50px;
+  .gate-card {
+    min-height: 120px;
+    padding: 1.25rem 1rem;
+  }
+
+  .context-bar {
+    flex-wrap: wrap;
   }
 
   /* Case details */
@@ -1449,7 +1540,7 @@ body {
   }
 
   .header-actions,
-  .channel-tabs,
+  .entry-gate,
   .toolbar-card,
   .sub-tabs-container,
   .view-mode-toggle,
@@ -1471,6 +1562,18 @@ body {
     padding: 0 0 0.8rem 0;
     margin-bottom: 0.8rem;
     border-bottom: 2px solid #000;
+  }
+
+  /* Context bar must survive print — states which vertical/checklist a docket belongs to */
+  .context-bar {
+    display: flex !important;
+    background: transparent !important;
+    border-left: 3px solid #000 !important;
+    padding: 0.3rem 0 0.3rem 0.6rem;
+  }
+
+  .context-label {
+    color: #000;
   }
 
   .brand-icon-wrapper {

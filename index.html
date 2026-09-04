@@ -51,18 +51,50 @@
         </div>
       </div>
 
-      <!-- Channel Switcher Tabs -->
-      <div class="channel-tabs">
-        <button type="button" class="channel-tab active" id="channelDSA">
-          <span>🏢 Secured DSA (Channel Partner)</span>
-          <span class="badge-count" id="countDSA">10 States</span>
-        </button>
-        <button type="button" class="channel-tab" id="channelDirect">
-          <span>🎯 Secured Direct (Branch Sourcing)</span>
-          <span class="badge-count" id="countDirect">3 States</span>
-        </button>
+      <!-- Context Bar -->
+      <div class="context-bar" id="contextBar">
+        <span class="context-label" id="contextLabel"></span>
+        <button type="button" class="btn btn-outline" id="btnChangeContext">Change</button>
       </div>
     </header>
+
+    <!-- Entry Gate: choose vertical, then checklist discipline -->
+    <section class="entry-gate" id="entryGate">
+      <div class="gate-step">
+        <div class="gate-step-title">Step 1 — Choose your vertical</div>
+        <div class="gate-cards">
+          <button type="button" class="gate-card" id="gateChannelDSA">
+            <span class="gate-icon">🏢</span>
+            <span class="gate-title">Secured DSA</span>
+            <span class="gate-count" id="countDSA">10 States</span>
+            <span class="gate-desc">Channel Partner sourcing</span>
+          </button>
+          <button type="button" class="gate-card" id="gateChannelDirect">
+            <span class="gate-icon">🎯</span>
+            <span class="gate-title">Secured Direct</span>
+            <span class="gate-count" id="countDirect">3 States</span>
+            <span class="gate-desc">Branch sourcing</span>
+          </button>
+        </div>
+      </div>
+      <div class="gate-step">
+        <div class="gate-step-title">Step 2 — Choose your checklist</div>
+        <div class="gate-cards">
+          <button type="button" class="gate-card gate-card-disc is-disabled" id="gateDiscLegal" disabled>
+            <span class="gate-icon">⚖️</span>
+            <span class="gate-title">Legal Checklist</span>
+            <span class="gate-desc">Title, ownership & encumbrance documents</span>
+          </button>
+          <button type="button" class="gate-card gate-card-disc is-disabled" id="gateDiscTechnical" disabled>
+            <span class="gate-icon">📐</span>
+            <span class="gate-title">Technical Checklist</span>
+            <span class="gate-desc">Valuation & property inspection documents</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <div id="workspace" style="display: none;">
 
     <!-- Case / Borrower Docket Information Card -->
     <section class="case-details-card">
@@ -112,32 +144,10 @@
           </select>
         </div>
 
-        <!-- Legal Stage Filter -->
+        <!-- Process Stage Filter -->
         <div class="filter-item">
-          <label for="legalStageSelect">Legal Stage Requirement</label>
-          <select id="legalStageSelect">
-            <option value="ALL">All Legal Stages</option>
-            <option value="Login">Login</option>
-            <option value="Initiation" selected>Initiation</option>
-            <option value="Legal Vetting">Legal Vetting</option>
-            <option value="Cheque Handover">Cheque Handover</option>
-            <option value="Post Disbursement">Post Disbursement</option>
-            <option value="Not Applicable">Not Applicable</option>
-          </select>
-        </div>
-
-        <!-- Technical Stage Filter -->
-        <div class="filter-item">
-          <label for="techStageSelect">Technical Stage Requirement</label>
-          <select id="techStageSelect">
-            <option value="ALL">All Technical Stages</option>
-            <option value="Login">Login</option>
-            <option value="Initiation" selected>Initiation</option>
-            <option value="Legal Vetting">Legal Vetting</option>
-            <option value="Cheque Handover">Cheque Handover</option>
-            <option value="If Applicable">If Applicable</option>
-            <option value="Not Applicable">Not Applicable</option>
-          </select>
+          <label for="stageSelect">Process Stage</label>
+          <select id="stageSelect"></select>
         </div>
 
       </div>
@@ -221,6 +231,8 @@
         </div>
       </div>
     </aside>
+
+    </div>
 
   </div>
 

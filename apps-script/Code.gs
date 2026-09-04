@@ -5,6 +5,10 @@
  * POSTs from the static browser app (index.html / app.js) and appends one
  * row per loan application submission.
  *
+ * Each submission is routed by channel (Secured DSA / Secured Direct) and
+ * discipline (Legal / Technical) into one of four tabs: "DSA - Legal",
+ * "DSA - Technical", "Direct - Legal", "Direct - Technical".
+ *
  * SETUP
  * 1. Open the spreadsheet > Extensions > Apps Script, paste this file.
  * 2. Set SHARED_TOKEN below to a long random string.
@@ -24,17 +28,24 @@ var SHEET_ID = '1azYCThvKo0mFIdEPa12EFbD7UVx2FjKENQS6klblNQU';
 
 var SHARED_TOKEN = 'CHANGE_ME_TO_A_LONG_RANDOM_STRING';
 
-// Server-side allowlist of channel -> sheet tab name. The client sends a
-// channel string, never a tab name directly, so a malicious or buggy client
-// cannot make this script create or write to an arbitrary sheet tab.
+// Server-side allowlist of "channel|discipline" -> sheet tab name. The
+// client sends channel and discipline strings, never a tab name directly,
+// so a malicious or buggy client cannot make this script create or write
+// to an arbitrary sheet tab.
 var TABS = {
-  'Secured DSA': 'DSA',
-  'Secured Direct': 'Direct'
+  'Secured DSA|Legal':        'DSA - Legal',
+  'Secured DSA|Technical':    'DSA - Technical',
+  'Secured Direct|Legal':     'Direct - Legal',
+  'Secured Direct|Technical': 'Direct - Technical'
 };
+
+// Leading characters that make Google Sheets parse a cell as a formula.
+var FORMULA_TRIGGERS = ['=', '+', '-', '@'];
 
 var HEADERS = [
   'Jarvis Application ID',
   'Timestamp (IST)',
+  'Discipline',
   'Borrower / Entity Name',
   'Property Address / City',
   'Credit Manager',
@@ -76,9 +87,9 @@ function doPost(e) {
       return jsonOut({ ok: false, error: 'Unauthorized request.' });
     }
 
-    var tabName = TABS[String(body.channel || '')];
+    var tabName = TABS[String(body.channel || '') + '|' + String(body.discipline || '')];
     if (!tabName) {
-      return jsonOut({ ok: false, error: 'Unknown channel: ' + body.channel });
+      return jsonOut({ ok: false, error: 'Unknown channel/discipline: ' + body.channel + ' / ' + body.discipline });
     }
 
     var appId = String(body.jarvisAppId || '').trim();
@@ -124,6 +135,7 @@ function doPost(e) {
     var row = [
       appId,
       ts,
+      nz(body.discipline),
       nz(body.borrowerName),
       nz(body.propertyAddress),
       nz(body.creditManager),
@@ -135,11 +147,12 @@ function doPost(e) {
 
     var target = sh.getLastRow() + 1;
 
-    // Number format is forced to plain text ('@') and appendRow() is
-    // deliberately avoided: appendRow() evaluates a leading "=" in any
-    // cell value, so a borrower name of "=IMPORTXML(...)" (or similar)
-    // would execute as a formula inside the sheet. setValues() with a
-    // text number format writes it as an inert string instead.
+    // appendRow() is deliberately avoided because it evaluates a leading
+    // "=" in any cell value. Note that setValues() does so too, and the
+    // '@' (plain text) number format does NOT prevent it — it only
+    // affects display. The actual formula-injection guard lives in nz(),
+    // which escapes the value before it ever reaches this call. The
+    // number format is kept so long digit strings are not reformatted.
     sh.getRange(target, 1, 1, HEADERS.length).setNumberFormat('@').setValues([row]);
     SpreadsheetApp.flush();
 
@@ -163,12 +176,28 @@ function doPost(e) {
  * null to ISBLANK/COUNTA/QUERY/IMPORTRANGE), never the literal text
  * "null", which would be truthy and indistinguishable from a value a user
  * actually typed.
+ *
+ * It also neutralises spreadsheet formula injection. Every field below is
+ * free text typed by a loan officer, and setValues() parses a leading "="
+ * as a formula, so a borrower name of "=IMPORTXML(...)" would execute
+ * inside the sheet and could leak other cells to an external URL. It also
+ * corrupts honest data: any name starting with "=" or "-" renders as
+ * #REF!. Prefixing with an apostrophe makes Sheets store the value as
+ * literal text — the apostrophe is a text marker, not part of the stored
+ * string, so getValues() and QUERY still see the original value.
  */
 function nz(v) {
   if (v === null || v === undefined) {
     return '';
   }
-  return String(v).trim();
+
+  var s = String(v).trim();
+
+  if (s !== '' && FORMULA_TRIGGERS.indexOf(s.charAt(0)) !== -1) {
+    s = "'" + s;
+  }
+
+  return s;
 }
 
 /**
