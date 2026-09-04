@@ -33,6 +33,9 @@
         </div>
         
         <div class="header-actions">
+          <button type="button" class="btn btn-success" id="btnSubmitInitiation" title="Submit Initiation Status to Google Sheet">
+            📤 Submit Initiation Status
+          </button>
           <button type="button" class="btn btn-outline" id="btnPrint" title="Print Checklist or Save as PDF">
             🖨️ Print / PDF
           </button>
@@ -72,8 +75,10 @@
       </div>
       <div class="case-fields" id="caseFields" style="display: none;">
         <div class="field-group">
-          <label for="inputAppNo">Loan Application No.</label>
-          <input type="text" id="inputAppNo" placeholder="e.g. LAP-2026-88492">
+          <label for="inputAppNo">Jarvis Application ID<span class="req">*</span></label>
+          <input type="text" id="inputAppNo" placeholder="3f2b8c1a-9d4e-4f77-b0a1-2c5e8d9f1234" autocomplete="off" spellcheck="false">
+          <small class="field-hint">Copy the App Form ID from Jarvis — a 36-character UUID.</small>
+          <small class="field-error" id="appNoError" style="display: none;"></small>
         </div>
         <div class="field-group">
           <label for="inputCustomerName">Borrower / Entity Name</label>
@@ -84,12 +89,8 @@
           <input type="text" id="inputAddress" placeholder="e.g. Flat 402, Greenfield Heights, Pune">
         </div>
         <div class="field-group">
-          <label for="inputDate">Checklist Date</label>
-          <input type="date" id="inputDate">
-        </div>
-        <div class="field-group">
-          <label for="inputOfficer">Processing / Credit Officer</label>
-          <input type="text" id="inputOfficer" placeholder="e.g. Amit Verma (Credit Mgr)">
+          <label for="inputOfficer">Credit Manager</label>
+          <input type="text" id="inputOfficer" placeholder="e.g. Amit Verma">
         </div>
       </div>
     </section>
@@ -139,14 +140,6 @@
           </select>
         </div>
 
-        <!-- Real-time Search -->
-        <div class="filter-item" style="grid-column: span 1;">
-          <label for="searchInput">Search Document</label>
-          <div style="position: relative; display: flex; align-items: center;">
-            <input type="text" id="searchInput" placeholder="Search by name, 7/12, NOC, ATS..." style="width: 100%; padding-right: 2rem;">
-            <button type="button" id="clearSearchBtn" style="position: absolute; right: 8px; border: none; background: transparent; cursor: pointer; color: var(--text-muted); font-size: 0.8rem;" title="Clear search">✕</button>
-          </div>
-        </div>
       </div>
 
       <!-- Sub-Tabs for Sheets with multiple tables -->
@@ -192,6 +185,13 @@
         </div>
       </div>
 
+      <div class="search-bar">
+        <label for="searchInput" class="sr-only-label">Search Document</label>
+        <span class="search-icon" aria-hidden="true">🔍</span>
+        <input type="text" id="searchInput" placeholder="Search documents by name, 7/12, NOC, ATS...">
+        <button type="button" id="clearSearchBtn" class="search-clear-btn" title="Clear search" aria-label="Clear search">✕</button>
+      </div>
+
       <div id="contentArea"></div>
     </main>
 
@@ -222,6 +222,21 @@
       </div>
     </aside>
 
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div class="modal-backdrop" id="modalBackdrop" style="display: none;">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
+      <h3 class="modal-title" id="modalTitle">Sales Query initiated for pending cases?</h3>
+      <p class="modal-message">Share the list below with Sales, then confirm.</p>
+      <textarea class="modal-copy-block" id="modalCopyText" readonly rows="8"></textarea>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" id="modalCopyBtn">📋 Copy</button>
+        <span class="modal-spacer"></span>
+        <button type="button" class="btn btn-outline" id="modalNoBtn">No</button>
+        <button type="button" class="btn btn-primary" id="modalYesBtn">Yes, query raised</button>
+      </div>
+    </div>
   </div>
 
   <!-- Toast Notification Container -->

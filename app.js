@@ -17,12 +17,26 @@
       appNo: '',
       customerName: '',
       propertyAddress: '',
-      date: new Date().toISOString().split('T')[0],
       officerName: ''
     },
     // Map of docId -> { status: 'pending'|'collected'|'waived'|'na', notes: '' }
     checklistStatus: {}
   };
+
+  // Docket input element id -> state.caseDetails key
+  const CASE_FIELDS = {
+    inputAppNo: 'appNo',
+    inputCustomerName: 'customerName',
+    inputAddress: 'propertyAddress',
+    inputOfficer: 'officerName'
+  };
+
+  // --- Google Sheet submission config (fill in after deploying apps-script/Code.gs) ---
+  const SHEETS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzEnbnKP6Wc90kjR7PzCGtldgn0NyDZyszcGLjIspWqjZx02N8Hap7r3tB_2U2U9dLHnA/exec'; // e.g. 'https://script.google.com/macros/s/AKfy.../exec'
+  const SHEETS_TOKEN = 'g08a9tHMxmWQ3hUjK7wTCJI9KQn9Ppzb';    // must match SHARED_TOKEN in apps-script/Code.gs
+
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const STATUS_LABEL = { pending: 'Pending', collected: 'Collected', waived: 'Waived', na: 'N/A' };
 
   // DOM Elements
   const el = {
@@ -55,17 +69,25 @@
     inputAppNo: document.getElementById('inputAppNo'),
     inputCustomerName: document.getElementById('inputCustomerName'),
     inputAddress: document.getElementById('inputAddress'),
-    inputDate: document.getElementById('inputDate'),
     inputOfficer: document.getElementById('inputOfficer'),
+    appNoError: document.getElementById('appNoError'),
     caseToggle: document.getElementById('caseToggle'),
     caseFields: document.getElementById('caseFields'),
-    
+
     // Action Buttons
     btnPrint: document.getElementById('btnPrint'),
     btnExportCSV: document.getElementById('btnExportCSV'),
     btnSaveLocal: document.getElementById('btnSaveLocal'),
     btnResetChecklist: document.getElementById('btnResetChecklist'),
-    toastContainer: document.getElementById('toastContainer')
+    btnSubmitInitiation: document.getElementById('btnSubmitInitiation'),
+    toastContainer: document.getElementById('toastContainer'),
+
+    // Modal
+    modalBackdrop: document.getElementById('modalBackdrop'),
+    modalCopyText: document.getElementById('modalCopyText'),
+    modalCopyBtn: document.getElementById('modalCopyBtn'),
+    modalYesBtn: document.getElementById('modalYesBtn'),
+    modalNoBtn: document.getElementById('modalNoBtn')
   };
 
   // Helper to normalize and strictly match stage comparison
@@ -149,11 +171,12 @@
     setupChannelCounts();
     setupCaseDetails();
     setupEventListeners();
-    
+    loadCaseDetails();
+
     // Set initial dropdown values
     if (el.legalStageSelect) el.legalStageSelect.value = state.selectedLegalStage;
     if (el.techStageSelect) el.techStageSelect.value = state.selectedTechStage;
-    
+
     // Initial Load with resolved channel from URL params
     setChannel(state.channel, state.selectedState);
   }
@@ -176,30 +199,31 @@
   }
 
   function setupCaseDetails() {
-    if (el.inputDate) el.inputDate.value = state.caseDetails.date;
-    
-    ['AppNo', 'CustomerName', 'Address', 'Date', 'Officer'].forEach(field => {
-      const input = el[`input${field}`];
+    Object.keys(CASE_FIELDS).forEach(id => {
+      const input = el[id];
       if (input) {
         input.addEventListener('input', (e) => {
-          const key = field.charAt(0).toLowerCase() + field.slice(1);
-          state.caseDetails[key] = e.target.value;
-          saveToLocalStorage(false);
+          state.caseDetails[CASE_FIELDS[id]] = e.target.value;
+          if (id === 'inputAppNo') clearAppNoError();
+          saveCaseDetails();
         });
       }
     });
 
     if (el.caseToggle) {
       el.caseToggle.addEventListener('click', () => {
-        const isCurrentlyOpen = el.caseFields.style.display !== 'none';
-        el.caseFields.style.display = isCurrentlyOpen ? 'none' : 'grid';
-        el.caseToggle.classList.toggle('open', !isCurrentlyOpen);
-        const icon = el.caseToggle.querySelector('.toggle-icon');
-        if (icon) icon.textContent = isCurrentlyOpen ? '▼' : '▲';
-        const hint = document.getElementById('caseToggleHint');
-        if (hint) hint.textContent = isCurrentlyOpen ? '(Click to expand)' : '(Click to collapse)';
+        setCaseFieldsOpen(el.caseFields.style.display === 'none');
       });
     }
+  }
+
+  function setCaseFieldsOpen(open) {
+    el.caseFields.style.display = open ? 'grid' : 'none';
+    el.caseToggle.classList.toggle('open', open);
+    const icon = el.caseToggle.querySelector('.toggle-icon');
+    if (icon) icon.textContent = open ? '▲' : '▼';
+    const hint = document.getElementById('caseToggleHint');
+    if (hint) hint.textContent = open ? '(Click to collapse)' : '(Click to expand)';
   }
 
   function setupEventListeners() {
@@ -279,6 +303,20 @@
       showToast('Checklist state saved successfully!');
     });
     el.btnResetChecklist.addEventListener('click', resetChecklist);
+    el.btnSubmitInitiation.addEventListener('click', submitInitiation);
+
+    // Modal
+    el.modalYesBtn.addEventListener('click', () => closeModal(true));
+    el.modalNoBtn.addEventListener('click', () => closeModal(false));
+    el.modalCopyBtn.addEventListener('click', copyModalText);
+    el.modalBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.modalBackdrop) closeModal(false);
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && el.modalBackdrop.style.display !== 'none') {
+        closeModal(false);
+      }
+    });
   }
 
   function setChannel(channelName, preferredState = null) {
@@ -304,6 +342,7 @@
     }
     
     state.selectedTableIndex = 0;
+    loadCaseDetails();
     updateQueryParams();
     loadStateData();
   }
@@ -358,6 +397,10 @@
     return `checklist_${state.channel}_${state.selectedState}_${tableTitle}`;
   }
 
+  function getCaseStorageKey() {
+    return `checklist_case_${state.channel}`;
+  }
+
   function loadFromLocalStorage() {
     const key = getStorageKey();
     const saved = localStorage.getItem(key);
@@ -365,14 +408,6 @@
       try {
         const parsed = JSON.parse(saved);
         state.checklistStatus = parsed.status || {};
-        if (parsed.caseDetails) {
-          state.caseDetails = { ...state.caseDetails, ...parsed.caseDetails };
-          if (el.inputAppNo) el.inputAppNo.value = state.caseDetails.appNo || '';
-          if (el.inputCustomerName) el.inputCustomerName.value = state.caseDetails.customerName || '';
-          if (el.inputAddress) el.inputAddress.value = state.caseDetails.propertyAddress || '';
-          if (el.inputDate) el.inputDate.value = state.caseDetails.date || '';
-          if (el.inputOfficer) el.inputOfficer.value = state.caseDetails.officerName || '';
-        }
       } catch(e) {
         state.checklistStatus = {};
       }
@@ -385,17 +420,65 @@
     const key = getStorageKey();
     const payload = {
       status: state.checklistStatus,
-      caseDetails: state.caseDetails,
       updatedAt: new Date().toISOString()
     };
     localStorage.setItem(key, JSON.stringify(payload));
   }
 
+  function saveCaseDetails() {
+    localStorage.setItem(getCaseStorageKey(), JSON.stringify(state.caseDetails));
+  }
+
+  function loadCaseDetails() {
+    const saved = localStorage.getItem(getCaseStorageKey());
+    let parsed = {};
+    if (saved) {
+      try {
+        parsed = JSON.parse(saved) || {};
+      } catch(e) {
+        parsed = {};
+      }
+    }
+    Object.keys(CASE_FIELDS).forEach(id => {
+      const key = CASE_FIELDS[id];
+      state.caseDetails[key] = parsed[key] || '';
+      if (el[id]) el[id].value = state.caseDetails[key];
+    });
+  }
+
+  function performReset() {
+    localStorage.removeItem(getCaseStorageKey());
+    Object.keys(localStorage).forEach(k => {
+      if (k.indexOf('checklist_' + state.channel + '_') === 0) {
+        localStorage.removeItem(k);
+      }
+    });
+
+    state.checklistStatus = {};
+
+    Object.keys(CASE_FIELDS).forEach(id => {
+      state.caseDetails[CASE_FIELDS[id]] = '';
+      if (el[id]) el[id].value = '';
+    });
+    clearAppNoError();
+
+    state.searchQuery = '';
+    if (el.searchInput) el.searchInput.value = '';
+
+    state.selectedPropertyType = 'ALL';
+    state.selectedLegalStage = 'Initiation';
+    state.selectedTechStage = 'Initiation';
+    if (el.propertyTypeSelect) el.propertyTypeSelect.value = 'ALL';
+    if (el.legalStageSelect) el.legalStageSelect.value = 'Initiation';
+    if (el.techStageSelect) el.techStageSelect.value = 'Initiation';
+
+    updateQueryParams();
+    render();
+  }
+
   function resetChecklist() {
-    if (confirm('Are you sure you want to reset all document statuses and notes for this sheet?')) {
-      state.checklistStatus = {};
-      saveToLocalStorage(false);
-      render();
+    if (confirm('This will clear document statuses, notes and docket details for every state in this channel. Search will be cleared, Property Type reset to All, and both stages reset to Initiation. The selected state is kept. Continue?')) {
+      performReset();
       showToast('Checklist has been reset');
     }
   }
@@ -728,15 +811,13 @@
     const docs = getFilteredDocuments();
     let csv = `Legal & Technical Checklist - ${state.channel} - ${state.selectedState} - ${currentTable.title}
 `;
-    csv += `Loan Application No:,"${state.caseDetails.appNo}"
+    csv += `Jarvis Application ID:,"${state.caseDetails.appNo}"
 `;
     csv += `Customer Name:,"${state.caseDetails.customerName}"
 `;
     csv += `Property Address:,"${state.caseDetails.propertyAddress}"
 `;
-    csv += `Date:,"${state.caseDetails.date}"
-`;
-    csv += `Officer:,"${state.caseDetails.officerName}"
+    csv += `Credit Manager:,"${state.caseDetails.officerName}"
 
 `;
 
@@ -760,15 +841,199 @@
     showToast('Exported CSV successfully!');
   }
 
-  function showToast(msg) {
+  function showAppNoError(msg) {
+    setCaseFieldsOpen(true); // the card is collapsed by default, the error would otherwise be invisible
+    if (el.appNoError) {
+      el.appNoError.textContent = msg;
+      el.appNoError.style.display = 'block';
+    }
+    if (el.inputAppNo) {
+      el.inputAppNo.classList.add('input-error');
+      el.inputAppNo.focus();
+    }
+    showToast(msg, 'error');
+  }
+
+  function clearAppNoError() {
+    if (el.appNoError) {
+      el.appNoError.textContent = '';
+      el.appNoError.style.display = 'none';
+    }
+    if (el.inputAppNo) el.inputAppNo.classList.remove('input-error');
+  }
+
+  function buildDocumentStatus(docs) {
+    return docs.map(doc => {
+      const status = (state.checklistStatus[doc.id] && state.checklistStatus[doc.id].status) || 'pending';
+      return `${doc.name} -> ${STATUS_LABEL[status] || STATUS_LABEL.pending}`;
+    }).join('; ');
+  }
+
+  async function submitInitiation() {
+    clearAppNoError();
+
+    if (!SHEETS_ENDPOINT) {
+      showToast('Submission endpoint is not configured. Set SHEETS_ENDPOINT in app.js.', 'error');
+      return;
+    }
+    if (state.selectedLegalStage !== 'Initiation') {
+      showToast('This submission needs to be recorded only for Initiation. Set Legal Stage Requirement to "Initiation".', 'error');
+      return;
+    }
+    if (state.selectedTechStage !== 'Initiation') {
+      showToast('This submission needs to be recorded only for Initiation. Set Technical Stage Requirement to "Initiation".', 'error');
+      return;
+    }
+    const appId = (state.caseDetails.appNo || '').trim();
+    if (!appId) {
+      showAppNoError('Jarvis Application ID is mandatory. Copy the App Form ID from Jarvis.');
+      return;
+    }
+    if (!UUID_RE.test(appId)) {
+      showAppNoError('Invalid Jarvis Application ID. Copy the App Form ID from Jarvis — it looks like 3f2b8c1a-9d4e-4f77-b0a1-2c5e8d9f1234.');
+      return;
+    }
+    if (state.selectedPropertyType === 'ALL') {
+      showToast('Select a specific Property / Collateral Type before submitting.', 'error');
+      return;
+    }
+
+    // Auto-clear search so the visible list matches exactly what gets recorded
+    if (state.searchQuery) {
+      state.searchQuery = '';
+      if (el.searchInput) el.searchInput.value = '';
+      render();
+    }
+
+    // Sub-tab guard: auto-switch to the sub-table that actually has matches
+    const tables = (CHECKLIST_DATA[state.channel] && CHECKLIST_DATA[state.channel][state.selectedState]) || [];
+    if (tables.length > 1 && getMatchingDocsForTable(tables[state.selectedTableIndex]).length === 0) {
+      const betterIndex = tables.findIndex(t => getMatchingDocsForTable(t).length > 0);
+      if (betterIndex !== -1) {
+        state.selectedTableIndex = betterIndex;
+        render();
+      }
+    }
+
+    const docs = getFilteredDocuments();
+    if (docs.length === 0) {
+      showToast('No documents match the current filters — nothing to submit.', 'error');
+      return;
+    }
+
+    const pending = docs.filter(doc => {
+      const status = (state.checklistStatus[doc.id] && state.checklistStatus[doc.id].status) || 'pending';
+      return status === 'pending';
+    });
+
+    let queryRaisedToSales;
+    if (pending.length) {
+      const text = 'Please submit the following documents:\n' + pending.map(d => d.name).join('\n');
+      const yes = await confirmPendingQuery(text);
+      if (!yes) {
+        showToast('You must initiate a query with Sales for the pending documents before submitting.', 'error');
+        return;
+      }
+      queryRaisedToSales = 'Yes';
+    } else {
+      queryRaisedToSales = 'Not Applicable';
+    }
+
+    const payload = {
+      token: SHEETS_TOKEN,
+      channel: state.channel,
+      jarvisAppId: appId,
+      borrowerName: (state.caseDetails.customerName || '').trim(),
+      propertyAddress: (state.caseDetails.propertyAddress || '').trim(),
+      creditManager: (state.caseDetails.officerName || '').trim(),
+      state: state.selectedState,
+      propertyType: state.selectedPropertyType,
+      queryRaisedToSales: queryRaisedToSales,
+      documentStatus: buildDocumentStatus(docs)
+    };
+
+    const originalLabel = el.btnSubmitInitiation.textContent;
+    el.btnSubmitInitiation.disabled = true;
+    el.btnSubmitInitiation.textContent = '⏳ Submitting...';
+
+    try {
+      // text/plain is deliberate: it keeps this a CORS "simple request" so no OPTIONS
+      // preflight is issued — Apps Script cannot answer a preflight, and application/json
+      // would trigger one. Apps Script also cannot set HTTP status codes, so branch on
+      // data.ok, never res.status.
+      const res = await fetch(SHEETS_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        showToast('Submitted to "' + data.tab + '" (row ' + data.row + ').');
+        performReset();
+      } else {
+        showToast((data && data.error) || 'Submission failed. Please try again.', 'error');
+      }
+    } catch(e) {
+      console.error('submitInitiation failed:', e);
+      showToast('Could not reach the submission endpoint. Check your connection and the endpoint URL.', 'error');
+    } finally {
+      el.btnSubmitInitiation.disabled = false;
+      el.btnSubmitInitiation.textContent = originalLabel;
+    }
+  }
+
+  let modalResolve = null;
+  let modalLastFocus = null;
+
+  function confirmPendingQuery(copyText) {
+    el.modalCopyText.value = copyText;
+    modalLastFocus = document.activeElement;
+    el.modalBackdrop.style.display = 'flex';
+    el.modalYesBtn.focus();
+    return new Promise(resolve => { modalResolve = resolve; });
+  }
+
+  function closeModal(answer) {
+    if (el.modalBackdrop.style.display === 'none') return;
+    el.modalBackdrop.style.display = 'none';
+    if (modalLastFocus) modalLastFocus.focus();
+    const resolve = modalResolve;
+    modalResolve = null;
+    if (resolve) resolve(!!answer);
+  }
+
+  async function copyModalText() {
+    let success = false;
+    try {
+      await navigator.clipboard.writeText(el.modalCopyText.value);
+      success = true;
+    } catch(e) {
+      try {
+        el.modalCopyText.select();
+        success = document.execCommand('copy');
+      } catch(e2) {
+        success = false;
+      }
+    }
+    if (success) {
+      showToast('Copied to clipboard');
+    } else {
+      showToast('Copy failed — select the text manually', 'error');
+    }
+    el.modalYesBtn.focus();
+  }
+
+  function showToast(msg, type) {
     const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.innerHTML = `<span>✓</span> <span>${escapeHtml(msg)}</span>`;
+    const isError = type === 'error';
+    toast.className = isError ? 'toast toast-error' : 'toast';
+    toast.innerHTML = `<span>${isError ? '⚠' : '✓'}</span> <span>${escapeHtml(msg)}</span>`;
     el.toastContainer.appendChild(toast);
     setTimeout(() => {
       toast.style.opacity = '0';
       setTimeout(() => toast.remove(), 300);
-    }, 2500);
+    }, isError ? 4500 : 2500);
   }
 
   function escapeHtml(str) {
